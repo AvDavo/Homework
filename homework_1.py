@@ -1,59 +1,94 @@
-import logging
-from logging.handlers import RotatingFileHandler
 import os
-# test
+from datetime import datetime
 
-operators = ("+", "-", "*", "/", "add", "sub", "mul", "div")
-operators_list = []
-operands = [0] * 2
-expr = input()
+ERROR_COUNT = 0
+INFO_COUNT = 0
 
-logger = logging.getLogger("My logger")
-log_dir = '.'
-log_file_name = "davo.log"
+ROOT_DIR = os.path.dirname(os.path.realpath(__file__))
+LOG_DIR = os.path.join(ROOT_DIR, "logging")
+LOG_FILE_PATH = os.path.join(LOG_DIR, 'logging.log')
 
-logger.setLevel(logging.INFO)
-os.makedirs(log_dir, exist_ok=True)
-log_path = os.path.join(log_dir, log_file_name)
-# 1GB for log files
-log_handler = RotatingFileHandler(log_path, maxBytes=204800000, backupCount=50000)
-formater = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
-log_handler.setFormatter(formater)
-logger.addHandler(log_handler)
-
-logger.error("I think I should have written something")
-logger.info("Here as well")
+os.makedirs(LOG_DIR, exist_ok=True)
 
 
-def infix_operation(expr):
-    this_list = expr.split()
-    if this_list[0] not in operators:
-        print("Invalid expression")
-        return
-    for x in this_list:
-        if x in operators:
-            operators_list.append(x)
+def write_error(input_string, error_msg):
+    with open(LOG_FILE_PATH, "a+") as log:
+        log.write(f"{datetime.now()} :: ERROR :: {error_msg} :: {input_string}\n")
+
+
+def write_info(input_string, res):
+    with open(LOG_FILE_PATH, "a+") as log:
+        log.write(f"{datetime.now()}:: INFO:: {input_string} :: {res}\n")
+
+
+def is_operator(character: str) -> bool:
+    if character in ("+", "-", "*", "/", "add", "sub", "mul", "div"):
+        return True
+    return False
+
+
+def error_in_input(calc_string: str) -> bool:
+    numerics = 0
+    operators = 0
+    calc_list = calc_string.split()
+
+    if not is_operator(calc_list[0]) or not calc_list[-1].isnumeric() or \
+            not calc_list[-2].isnumeric():
+        write_error(" ".join(calc_list), "First item - operator, last 2 items - floats")
+        return True
+
+    for element in calc_list[1:-2]:
+        if element.isnumeric():
+            numerics += 1
             continue
-        else:
-            if x.isnumeric():
-                if operands[0] == 0:
-                    operands[0] = float(x)
-                else:
-                    operands[1] = float(x)
-                    current_oper = operators_list.pop()
-                    if current_oper == "+" or current_oper == "+":
-                        operands[0], operands[1] = operands[0] + operands[1], 0
-                    elif current_oper == "-" or current_oper == "sub":
-                        operands[0], operands[1] = operands[0] - operands[1], 0
-                    elif current_oper == "*" or current_oper == "mul":
-                        operands[0], operands[1] = operands[0] * operands[1], 0
-                    elif current_oper == "/" or current_oper == "div":
-                        operands[0], operands[1] = operands[0] / operands[1], 0
-            else:
-                print("Invalid expression")
-                return
-    return operands[0]
+        elif is_operator(element):
+            operators += 1
+            continue
+        write_error(" ".join(calc_list), "Numeric or operator")
+        return True
 
-print("Expression: " + expr)
-print("Result: " + str(infix_operation(expr)))
+    # numerics should be equal to operands after first if
+    if numerics != operators:
+        write_error(" ".join(calc_list), "Items count")
+        return True
+
+    return False
+
+
+def prefix_calc(calc_string: str) -> float:
+    global ERROR_COUNT
+    global INFO_COUNT
+
+    calc_list = calc_string.split()
+    if error_in_input(calc_string):
+        ERROR_COUNT += 1
+    else:
+        operands = []
+        while calc_list:
+            last_item = calc_list.pop()
+            if is_operator(last_item):
+                ending = operands.pop()
+                prev_ending = operands.pop()
+                if last_item == "+" or last_item == "add":
+                    operands.append(ending + prev_ending)
+                elif last_item == "-" or last_item == "sub":
+                    operands.append(ending - prev_ending)
+                elif last_item == "*" or last_item == "mul":
+                    operands.append(ending * prev_ending)
+                elif last_item == "/" or last_item == "div":
+                    operands.append(ending / prev_ending)
+            else:
+                operands.append(float(last_item))
+
+        write_info(calc_string, operands[0])
+        INFO_COUNT += 1
+        return operands[0]
+
+
+while True:
+    input_str = input("Expression: ")
+    result = prefix_calc(input_str)
+    print(f"Result:  {result}" if result is not None else "ERROR: Invalid expression")
+    print("Report: Info-{}, ERROR-{}".format(INFO_COUNT, ERROR_COUNT))
+
 
